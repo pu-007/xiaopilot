@@ -9,9 +9,15 @@ struct Config {
     topic: String,
     trigger: String,
     mac: String,
+    #[serde(default = "default_broadcast")]
+    broadcast: String,
 }
 
-fn send_wol(mac: &str) -> Result<()> {
+fn default_broadcast() -> String {
+    "255.255.255.255".into()
+}
+
+fn send_wol(mac: &str, broadcast: &str) -> Result<()> {
     let mac_bytes: Vec<u8> = mac
         .split(':')
         .map(|s| u8::from_str_radix(s, 16))
@@ -27,12 +33,13 @@ fn send_wol(mac: &str) -> Result<()> {
         packet.extend_from_slice(&mac_bytes);
     }
 
+    let addr = format!("{}:9", broadcast);
     let socket = UdpSocket::bind("0.0.0.0:0").context("Failed to bind UDP socket")?;
     socket
         .set_broadcast(true)
         .context("Failed to set broadcast")?;
     socket
-        .send_to(&packet, "255.255.255.255:9")
+        .send_to(&packet, &addr)
         .context("Failed to send WOL packet")?;
 
     Ok(())
@@ -52,10 +59,12 @@ async fn main() -> Result<()> {
 
     let client_id =
         std::env::var("BAFA_ID").context("BAFA_ID not set in .env or environment")?;
+    let user = std::env::var("BAFA_USER").unwrap_or_else(|_| "userName".into());
+    let pass = std::env::var("BAFA_PASS").unwrap_or_else(|_| "passwd".into());
 
     let mut mqtt_opts = MqttOptions::new(&client_id, "bemfa.com", 9501);
     mqtt_opts.set_keep_alive(Duration::from_secs(60));
-    mqtt_opts.set_credentials("userName", "passwd");
+    mqtt_opts.set_credentials(user, pass);
 
     let (client, mut eventloop) = AsyncClient::new(mqtt_opts, 10);
 
@@ -65,8 +74,8 @@ async fn main() -> Result<()> {
         .context("Failed to subscribe to MQTT topic")?;
 
     eprintln!(
-        "[xiaopilot-wol] Connected to Bafa, listening for '{}' on topic '{}'",
-        config.trigger, config.topic
+        "[xiaopilot-wol] Connected to Bafa, listening for '{}' on topic '{}', broadcast {}",
+        config.trigger, config.topic, config.broadcast
     );
 
     loop {
@@ -77,8 +86,8 @@ async fn main() -> Result<()> {
                 eprintln!("[xiaopilot-wol] Received trigger: {}", trigger);
 
                 if trigger == config.trigger {
-                    eprintln!("[xiaopilot-wol] Sending WOL to {}", config.mac);
-                    if let Err(e) = send_wol(&config.mac) {
+                    eprintln!("[xiaopilot-wol] Sending WOL to {} via {}", config.mac, config.broadcast);
+                    if let Err(e) = send_wol(&config.mac, &config.broadcast) {
                         eprintln!("[xiaopilot-wol] WOL failed: {:#}", e);
                     } else {
                         eprintln!("[xiaopilot-wol] WOL packet sent");

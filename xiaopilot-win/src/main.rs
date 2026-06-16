@@ -4,6 +4,7 @@ use rumqttc::{AsyncClient, Event, MqttOptions, Packet, QoS};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::process::Command;
+use std::sync::OnceLock;
 use std::time::Duration;
 
 #[derive(Deserialize)]
@@ -28,19 +29,22 @@ enum Action {
     },
 }
 
-fn get_screen_width() -> Result<u32> {
-    let output = Command::new("powershell")
-        .args([
-            "-NoProfile",
-            "-Command",
-            "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Screen]::PrimaryScreen.Bounds.Width",
-        ])
-        .output()
-        .context("Failed to run PowerShell for screen width")?;
-    let s = String::from_utf8(output.stdout)?;
-    s.trim()
-        .parse()
-        .context("Failed to parse screen width from PowerShell output")
+static SCREEN_WIDTH: OnceLock<u32> = OnceLock::new();
+
+fn get_screen_width() -> u32 {
+    *SCREEN_WIDTH.get_or_init(|| {
+        Command::new("powershell")
+            .args([
+                "-NoProfile",
+                "-Command",
+                "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Screen]::PrimaryScreen.Bounds.Width",
+            ])
+            .output()
+            .ok()
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .and_then(|s| s.trim().parse().ok())
+            .unwrap_or(0)
+    })
 }
 
 fn parse_key(s: &str) -> Result<Key> {
@@ -139,7 +143,7 @@ fn execute(action: &Action) -> Result<()> {
         }
         Action::Sleep => {
             Command::new("rundll32.exe")
-                .args(["powrprof.dll,SetSuspendState", "0", "1", "0"])
+                .args(["powrprof.dll,SetSuspendState", "0", "0", "0"])
                 .spawn()
                 .context("Failed to run sleep command")?;
         }
@@ -158,7 +162,7 @@ fn execute(action: &Action) -> Result<()> {
             }
             "switch" => {
                 let dw = default_width.unwrap_or(2560);
-                let width = get_screen_width().unwrap_or(0);
+                let width = get_screen_width();
                 if width == dw {
                     Command::new("displayswitch.exe").arg("4").spawn()?;
                 } else {
@@ -188,10 +192,12 @@ async fn main() -> Result<()> {
 
     let client_id =
         std::env::var("BAFA_ID").context("BAFA_ID not set in .env or environment")?;
+    let user = std::env::var("BAFA_USER").unwrap_or_else(|_| "userName".into());
+    let pass = std::env::var("BAFA_PASS").unwrap_or_else(|_| "passwd".into());
 
     let mut mqtt_opts = MqttOptions::new(&client_id, "bemfa.com", 9501);
     mqtt_opts.set_keep_alive(Duration::from_secs(60));
-    mqtt_opts.set_credentials("userName", "passwd");
+    mqtt_opts.set_credentials(user, pass);
 
     let (client, mut eventloop) = AsyncClient::new(mqtt_opts, 10);
 

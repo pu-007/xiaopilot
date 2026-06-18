@@ -1,0 +1,4 @@
+topic: "PC002"
+trigger: "on"
+mac: "00:11:22:33:44:55"
+broadcast: "192.168.100.255"

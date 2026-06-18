@@ -1,0 +1,44 @@
+topic: "PC002"
+
+commands:
+  "off":
+    action: shutdown
+
+  "on#1":
+    action: reboot
+
+  "on#2":
+    action: monitor
+    mode: copy
+
+  "on#3":
+    action: monitor
+    mode: switch
+    default_width: 2560
+
+  "on#4":
+    action: monitor
+    mode: extend
+
+  "on#5":
+    action: monitor
+    mode: pc
+
+  "on#6":
+    action: monitor
+    mode: tv
+
+  "on#7":
+    action: key
+    keys: ["Space"]
+
+  "on#8":
+    action: key
+    keys: ["Alt", "Shift", "Escape"]
+
+  "on#9":
+    action: key
+    keys: ["Alt", "F"]
+
+  "on#12":
+    action: sleep

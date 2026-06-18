@@ -130,11 +130,11 @@ Examples:
 
 ### 2. Build
 
-Use [just](https://github.com/casey/just) (installed automatically via `cargo install just` if missing):
+Use [just](https://github.com/casey/just):
 
 ```bash
 just setup       # one-time: install rustup targets + cargo-zigbuild + zig
-just             # cross-compile both → bin/xiaopilot-wol + bin/xiaopilot-win.exe
+just             # cross-compile both → release/ + release_private/
 just build-win   # windows only
 just build-linux # linux only
 just clean       # remove build artifacts
@@ -154,17 +154,31 @@ Prerequisites for cross-compilation:
 - `zig` — download from [ziglang.org](https://ziglang.org/download/) or `scoop install zig` / `winget install zig.zig`
 - `cargo-zigbuild` — `cargo install cargo-zigbuild`
 
-### 3. Run
+### 3. Deploy
 
-```bash
-# Linux
-./bin/xiaopilot-wol
+Build output goes to two directories:
 
-# Windows
-.\bin\xiaopilot-win.exe
-```
+| Directory | Purpose |
+|-----------|---------|
+| `release/` | Shared release — configs overwritten from `.example` files |
+| `release_private/` | Personal release — executable updated, configs left untouched |
 
-Config files are read from the current working directory at startup. The program exits with an error if the required YAML file is missing.
+#### Windows
+
+1. Copy `release/xiaopilot-win/` to `C:\Users\<YourName>\xiaopilot-win\`
+2. Edit `.env` and `win.yml` with your credentials and MQTT topic
+3. Edit `start-xiaopilot.vbs` — update `CurrentDirectory` to your folder path
+4. Place `start-xiaopilot.vbs` shortcut in Startup folder (`Win+R` → `shell:startup`)
+
+#### OpenWRT / Linux
+
+1. Copy `release/xiaopilot-wol/` to `/root/xiaopilot-wol/` on the target device
+2. Edit `.env` and `wol.yml` with your credentials and MAC address
+3. Make the start script executable: `chmod +x /root/xiaopilot-wol/start-xiaopilot-wol.sh`
+4. Add to `/etc/rc.local` (before `exit 0`):
+   ```
+   /root/xiaopilot-wol/start-xiaopilot-wol.sh &
+   ```
 
 ## Project Structure
 
@@ -175,6 +189,15 @@ xiaopilot/
 ├── .env.example
 ├── wol.yml.example
 ├── win.yml.example
+├── scripts/
+│   ├── start-xiaopilot.vbs         # Windows auto-start script
+│   └── start-xiaopilot-wol.sh      # Linux/OpenWRT auto-start script
+├── release/                # shared release (configs from .example)
+│   ├── xiaopilot-win/
+│   └── xiaopilot-wol/
+├── release_private/        # private release (configs untouched)
+│   ├── xiaopilot-win/
+│   └── xiaopilot-wol/
 ├── xiaopilot-wol/          # Linux WOL binary
 │   ├── Cargo.toml
 │   └── src/main.rs
